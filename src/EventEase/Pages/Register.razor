@@ -1,0 +1,199 @@
+@page "/events/{EventId:int}/register"
+@inject EventService EventService
+@inject AttendanceService Attendance
+@inject UserSessionService Session
+
+@if (_loading)
+{
+    <LoadingIndicator />
+}
+else if (_event is null)
+{
+    <EventNotFound EventId="EventId" />
+}
+else
+{
+    <PageTitle>Registrazione · @_event.Name · EventEase</PageTitle>
+
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="events">Eventi</a></li>
+            <li class="breadcrumb-item"><a href="events/@_event.Id">@_event.Name</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Registrazione</li>
+        </ol>
+    </nav>
+
+    <h1 class="h3">Registrazione all'evento</h1>
+    <p class="lead">@_event.Name <span class="text-body-secondary">· @ItalianDate.Long(_event.Date) · @_event.Location</span></p>
+
+    @if (_registered is not null)
+    {
+        <div class="alert alert-success" role="status">
+            <h2 class="h5">Registrazione completata!</h2>
+            <p class="mb-2">
+                Grazie <strong>@_registered.FullName</strong>, il tuo posto è confermato.
+                Riceverai le comunicazioni all'indirizzo <strong>@_registered.Email</strong>.
+            </p>
+            @if (_sessionStarted)
+            {
+                <p class="small mb-2">Abbiamo avviato una sessione con i tuoi dati: trovi l'iscrizione in "Le mie iscrizioni".</p>
+            }
+            <div class="d-flex flex-wrap gap-2">
+                <a class="btn btn-success btn-sm" href="my-events">Le mie iscrizioni</a>
+                <a class="btn btn-outline-success btn-sm" href="events">Altri eventi</a>
+            </div>
+        </div>
+    }
+    else if (_blockedReason is not null)
+    {
+        <div class="alert alert-warning" role="alert">
+            <p class="mb-2">@_blockedReason</p>
+            <a class="btn btn-sm btn-outline-dark" href="events/@_event.Id">Torna all'evento</a>
+        </div>
+    }
+    else
+    {
+        <div class="row g-4">
+            <div class="col-lg-7">
+                <EditForm EditContext="_editContext" OnValidSubmit="HandleValidSubmitAsync" class="card card-body shadow-sm">
+                    <DataAnnotationsValidator />
+
+                    <div class="mb-3">
+                        <label for="full-name" class="form-label">Nome e cognome *</label>
+                        <InputText id="full-name" class="form-control" autocomplete="name" @bind-Value="_model.FullName" />
+                        <ValidationMessage For="() => _model.FullName" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email *</label>
+                        <InputText id="email" type="email" class="form-control" autocomplete="email" @bind-Value="_model.Email" />
+                        <ValidationMessage For="() => _model.Email" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="phone" class="form-label">Telefono <span class="text-body-secondary">(facoltativo)</span></label>
+                        <InputText id="phone" type="tel" class="form-control" autocomplete="tel" @bind-Value="_model.Phone" />
+                        <ValidationMessage For="() => _model.Phone" />
+                    </div>
+
+                    <div class="form-check mb-3">
+                        <InputCheckbox id="accept-terms" class="form-check-input" @bind-Value="_model.AcceptTerms" />
+                        <label for="accept-terms" class="form-check-label">Acconsento al trattamento dei dati personali per la gestione dell'evento. *</label>
+                        <ValidationMessage For="() => _model.AcceptTerms" />
+                    </div>
+
+                    <div>
+                        <button type="submit" class="btn btn-primary" disabled="@_submitting">
+                            @(_submitting ? "Invio in corso…" : "Conferma registrazione")
+                        </button>
+                    </div>
+                </EditForm>
+            </div>
+
+            <div class="col-lg-5">
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <h2 class="h5 mb-3">Disponibilità</h2>
+                        <CapacityBar Value="_stats.Registered" Max="_event.Capacity" Label="Posti occupati" />
+                        <p class="small text-body-secondary mb-0">Posti ancora disponibili: <strong>@_stats.AvailableSeats</strong></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    [Parameter]
+    public int EventId { get; set; }
+
+    private EventItem? _event;
+    private AttendanceStats _stats = new(0, 0, 0);
+    private RegistrationModel _model = new();
+    private EditContext _editContext = default!;
+    private ValidationMessageStore _serverMessages = default!;
+
+    private bool _loading = true;
+    private bool _submitting;
+    private bool _sessionStarted;
+    private Attendee? _registered;
+    private string? _blockedReason;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _registered = null;
+        _sessionStarted = false;
+        _event = await EventService.GetEventByIdAsync(EventId);
+        ResetForm();
+        _loading = false;
+    }
+
+    private void ResetForm()
+    {
+        // Pre-fill the form with the data of the current session.
+        var user = Session.CurrentUser;
+        _model = new RegistrationModel { FullName = user?.Name ?? string.Empty, Email = user?.Email ?? string.Empty };
+
+        _editContext = new EditContext(_model);
+        _serverMessages = new ValidationMessageStore(_editContext);
+        _editContext.OnValidationRequested += (_, _) => _serverMessages.Clear();
+        _editContext.OnFieldChanged += (_, e) => _serverMessages.Clear(e.FieldIdentifier);
+        _blockedReason = null;
+
+        if (_event is null)
+        {
+            return;
+        }
+
+        _stats = Attendance.GetStats(_event);
+        _blockedReason = _event.Date <= DateTime.Now ? "Le registrazioni sono chiuse: l'evento si è già svolto."
+            : _stats.IsFull ? "Ci dispiace, l'evento è al completo."
+            : user is not null && Attendance.IsRegistered(_event.Id, user.Email) ? "Sei già registrato a questo evento."
+            : null;
+    }
+
+    private async Task HandleValidSubmitAsync()
+    {
+        // Guard against double submits (double click or Enter pressed twice).
+        if (_submitting || _event is null)
+        {
+            return;
+        }
+
+        _submitting = true;
+        try
+        {
+            var result = await Attendance.RegisterAsync(_event, _model);
+            switch (result.Status)
+            {
+                case RegistrationStatus.Success:
+                    _registered = result.Attendee;
+                    if (!Session.IsLoggedIn)
+                    {
+                        await Session.LoginAsync(_model.FullName, _model.Email);
+                        _sessionStarted = true;
+                    }
+                    break;
+
+                case RegistrationStatus.AlreadyRegistered:
+                    _serverMessages.Add(new FieldIdentifier(_model, nameof(RegistrationModel.Email)),
+                        "Questa email risulta già registrata all'evento.");
+                    _editContext.NotifyValidationStateChanged();
+                    break;
+
+                case RegistrationStatus.EventFull:
+                    _blockedReason = "Ci dispiace, l'ultimo posto disponibile è appena stato assegnato.";
+                    break;
+
+                case RegistrationStatus.EventClosed:
+                    _blockedReason = "Le registrazioni sono chiuse: l'evento si è già svolto.";
+                    break;
+            }
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+}

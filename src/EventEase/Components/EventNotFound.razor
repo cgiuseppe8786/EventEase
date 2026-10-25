@@ -1,0 +1,17 @@
+@* Shown when a route has a valid format (e.g. /events/99) but the event does not exist. *@
+
+<PageTitle>Evento non trovato · EventEase</PageTitle>
+
+<div class="alert alert-warning" role="alert">
+    <h1 class="h4">Evento non trovato</h1>
+    <p class="mb-3">
+        Non esiste alcun evento con identificativo <strong>@EventId</strong>.
+        Potrebbe essere stato rimosso oppure il link non è corretto.
+    </p>
+    <a class="btn btn-sm btn-outline-dark" href="events">Torna all'elenco eventi</a>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public int EventId { get; set; }
+}

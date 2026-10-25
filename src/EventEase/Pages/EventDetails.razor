@@ -1,0 +1,133 @@
+@page "/events/{Id:int}"
+@implements IDisposable
+@inject EventService EventService
+@inject AttendanceService Attendance
+@inject UserSessionService Session
+
+@if (_loading)
+{
+    <LoadingIndicator />
+}
+else if (_event is null)
+{
+    <EventNotFound EventId="Id" />
+}
+else
+{
+    <PageTitle>@_event.Name · EventEase</PageTitle>
+
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="events">Eventi</a></li>
+            <li class="breadcrumb-item active" aria-current="page">@_event.Name</li>
+        </ol>
+    </nav>
+
+    <h1 class="h3 mb-3">Dettagli evento</h1>
+
+    @if (_saved)
+    {
+        <div class="alert alert-success alert-dismissible" role="status">
+            Modifiche salvate.
+            <button type="button" class="btn-close" aria-label="Chiudi" @onclick="() => _saved = false"></button>
+        </div>
+    }
+
+    <div class="row g-4">
+        <div class="col-lg-7">
+            @* Two-way binding: EventCard edits its own copy and, on save, updates _event; then SaveAsync persists it. *@
+            <EventCard @bind-Event="_event" @bind-Event:after="SaveAsync"
+                       AllowEdit="true" ShowDescription="true" ShowActions="false" LinkToDetails="false"
+                       RegisteredCount="_stats.Registered" />
+        </div>
+
+        <div class="col-lg-5">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h2 class="h5 mb-3">Partecipazione</h2>
+                    <CapacityBar Value="_stats.Registered" Max="_event.Capacity" Label="Posti occupati" />
+                    <CapacityBar Value="_stats.CheckedIn" Max="_stats.Registered" Label="Presenze registrate" />
+                    <p class="small text-body-secondary">Posti ancora disponibili: <strong>@_stats.AvailableSeats</strong></p>
+
+                    @if (_isUserRegistered)
+                    {
+                        <div class="alert alert-success py-2">Sei registrato a questo evento.</div>
+                        <a class="btn btn-outline-primary w-100" href="my-events">Le mie iscrizioni</a>
+                    }
+                    else if (_event.Date <= DateTime.Now)
+                    {
+                        <div class="alert alert-secondary py-2 mb-0">L'evento si è già svolto: registrazioni chiuse.</div>
+                    }
+                    else if (_stats.IsFull)
+                    {
+                        <div class="alert alert-danger py-2 mb-0">Evento al completo.</div>
+                    }
+                    else
+                    {
+                        <a class="btn btn-primary w-100" href="events/@_event.Id/register">Registrati ora</a>
+                    }
+
+                    <a class="btn btn-outline-secondary w-100 mt-2" href="attendance/@_event.Id">Gestisci presenze</a>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private EventItem? _event;
+    private AttendanceStats _stats = new(0, 0, 0);
+    private bool _isUserRegistered;
+    private bool _loading = true;
+    private bool _saved;
+
+    protected override void OnInitialized()
+    {
+        Attendance.OnChange += HandleDataChanged;
+        Session.OnChange += HandleDataChanged;
+    }
+
+    // Load in OnParametersSetAsync, not OnInitializedAsync: when navigating from /events/1 to /events/2
+    // Blazor reuses this component instance and OnInitializedAsync would not run again.
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _saved = false;
+        _event = await EventService.GetEventByIdAsync(Id);
+        RefreshStats();
+        _loading = false;
+    }
+
+    private void RefreshStats()
+    {
+        if (_event is null)
+        {
+            return;
+        }
+
+        _stats = Attendance.GetStats(_event);
+        _isUserRegistered = Session.CurrentUser is { } user && Attendance.IsRegistered(_event.Id, user.Email);
+    }
+
+    private async Task SaveAsync()
+    {
+        await EventService.UpdateEventAsync(_event!);
+        RefreshStats();
+        _saved = true;
+    }
+
+    private void HandleDataChanged() => _ = InvokeAsync(() =>
+    {
+        RefreshStats();
+        StateHasChanged();
+    });
+
+    public void Dispose()
+    {
+        Attendance.OnChange -= HandleDataChanged;
+        Session.OnChange -= HandleDataChanged;
+    }
+}

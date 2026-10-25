@@ -1,0 +1,188 @@
+@page "/attendance"
+@page "/attendance/{EventId:int}"
+@implements IDisposable
+@inject EventService EventService
+@inject AttendanceService AttendanceService
+@inject NavigationManager Navigation
+
+<PageTitle>Presenze · EventEase</PageTitle>
+
+<h1>Monitoraggio presenze</h1>
+<p class="text-body-secondary">Seleziona un evento per vedere gli iscritti e registrare il check-in all'ingresso.</p>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-8 col-lg-6">
+        <label for="event-select" class="form-label">Evento</label>
+        <select id="event-select" class="form-select" @bind="_selectedEventId" @bind:after="OnEventSelected">
+            <option value="">Seleziona un evento…</option>
+            @foreach (var ev in _events)
+            {
+                <option value="@ev.Id">@ev.Name (@ItalianDate.Short(ev.Date))</option>
+            }
+        </select>
+    </div>
+</div>
+
+@if (EventId is null)
+{
+    <div class="alert alert-info">Nessun evento selezionato.</div>
+}
+else if (_loading)
+{
+    <LoadingIndicator />
+}
+else if (_event is null)
+{
+    <EventNotFound EventId="EventId.Value" />
+}
+else
+{
+    <div class="row g-3 mb-4">
+        <div class="col-sm-4">
+            <div class="stat-tile">
+                <span class="stat-tile__value">@_stats.Registered<small class="fs-6 text-body-secondary"> / @_stats.Capacity</small></span>
+                <span class="stat-tile__label">Iscritti</span>
+            </div>
+        </div>
+        <div class="col-sm-4">
+            <div class="stat-tile">
+                <span class="stat-tile__value">@_stats.CheckedIn</span>
+                <span class="stat-tile__label">Presenti</span>
+            </div>
+        </div>
+        <div class="col-sm-4">
+            <div class="stat-tile">
+                <span class="stat-tile__value">@_stats.AttendanceRate%</span>
+                <span class="stat-tile__label">Tasso di presenza</span>
+            </div>
+        </div>
+    </div>
+
+    <CapacityBar Value="_stats.CheckedIn" Max="_stats.Registered" Label="Check-in effettuati" />
+
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mt-4 mb-2">
+        <h2 class="h5 mb-0">Iscritti a «@_event.Name»</h2>
+        <div>
+            <label for="attendee-filter" class="visually-hidden">Filtra iscritti</label>
+            <input id="attendee-filter" type="search" class="form-control form-control-sm" placeholder="Filtra per nome o email"
+                   maxlength="50" @bind="_filter" @bind:event="oninput" />
+        </div>
+    </div>
+
+    @if (_attendees.Count == 0)
+    {
+        <div class="alert alert-light border">
+            Nessun iscritto per ora. <a href="events/@_event.Id/register">Apri il modulo di registrazione</a>.
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead>
+                    <tr>
+                        <th scope="col">Nome</th>
+                        <th scope="col">Email</th>
+                        <th scope="col">Telefono</th>
+                        <th scope="col">Registrato il</th>
+                        <th scope="col">Stato</th>
+                        <th scope="col"><span class="visually-hidden">Azioni</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <Virtualize Items="FilteredAttendees" Context="attendee" SpacerElement="tr" ItemSize="49">
+                        <tr @key="attendee.Id">
+                            <td>@attendee.FullName</td>
+                            <td>@attendee.Email</td>
+                            <td>@(attendee.Phone ?? "—")</td>
+                            <td>@ItalianDate.ShortWithTime(attendee.RegisteredAt)</td>
+                            <td>
+                                @if (attendee.CheckedIn && attendee.CheckedInAt is { } checkedInAt)
+                                {
+                                    <span class="badge text-bg-success">Presente · @ItalianDate.Time(checkedInAt)</span>
+                                }
+                                else
+                                {
+                                    <span class="badge text-bg-light border">Atteso</span>
+                                }
+                            </td>
+                            <td class="text-end">
+                                <button type="button" class="btn btn-sm @(attendee.CheckedIn ? "btn-outline-secondary" : "btn-success")"
+                                        @onclick="() => ToggleCheckInAsync(attendee)">
+                                    @(attendee.CheckedIn ? "Annulla check-in" : "Check-in")
+                                </button>
+                            </td>
+                        </tr>
+                    </Virtualize>
+                </tbody>
+            </table>
+        </div>
+    }
+}
+
+@code {
+    [Parameter]
+    public int? EventId { get; set; }
+
+    private IReadOnlyList<EventItem> _events = [];
+    private EventItem? _event;
+    private IReadOnlyList<Attendee> _attendees = [];
+    private AttendanceStats _stats = new(0, 0, 0);
+    private int? _selectedEventId;
+    private string _filter = string.Empty;
+    private bool _loading = true;
+
+    private List<Attendee> FilteredAttendees =>
+        _filter.Trim() is { Length: > 0 } term
+            ? _attendees.Where(a => a.FullName.Contains(term, StringComparison.OrdinalIgnoreCase)
+                                    || a.Email.Contains(term, StringComparison.OrdinalIgnoreCase)).ToList()
+            : _attendees.ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        AttendanceService.OnChange += HandleAttendanceChanged;
+        _events = await EventService.GetEventsAsync();
+    }
+
+    // The same instance serves /attendance and /attendance/{id}: reload on every parameter change.
+    protected override async Task OnParametersSetAsync()
+    {
+        _selectedEventId = EventId;
+        _filter = string.Empty;
+
+        if (EventId is not int id)
+        {
+            _event = null;
+            return;
+        }
+
+        _loading = true;
+        _event = await EventService.GetEventByIdAsync(id);
+        LoadAttendees();
+        _loading = false;
+    }
+
+    private void LoadAttendees()
+    {
+        if (_event is null)
+        {
+            return;
+        }
+
+        _attendees = AttendanceService.GetAttendees(_event.Id);
+        _stats = AttendanceService.GetStats(_event);
+    }
+
+    private void OnEventSelected() =>
+        Navigation.NavigateTo(_selectedEventId is int id ? $"attendance/{id}" : "attendance");
+
+    private Task ToggleCheckInAsync(Attendee attendee) => AttendanceService.SetCheckInAsync(attendee.Id, !attendee.CheckedIn);
+
+    private void HandleAttendanceChanged() => _ = InvokeAsync(() =>
+    {
+        LoadAttendees();
+        StateHasChanged();
+    });
+
+    public void Dispose() => AttendanceService.OnChange -= HandleAttendanceChanged;
+}

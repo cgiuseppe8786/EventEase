@@ -1,0 +1,71 @@
+@page "/login"
+@inject UserSessionService Session
+@inject NavigationManager Navigation
+
+<PageTitle>Accedi · EventEase</PageTitle>
+
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <h1>Accedi</h1>
+
+        @if (Session.CurrentUser is { } user)
+        {
+            <div class="card card-body shadow-sm">
+                <p>Sei connesso come <strong>@user.Name</strong> (@user.Email).</p>
+                <p class="small text-body-secondary">La sessione scade alle @ItalianDate.Time(user.ExpiresAt.ToLocalTime().DateTime).</p>
+                <div class="d-flex gap-2">
+                    <a class="btn btn-primary" href="@SafeReturnUrl">Continua</a>
+                    <button type="button" class="btn btn-outline-secondary" @onclick="Session.LogoutAsync">Esci</button>
+                </div>
+            </div>
+        }
+        else
+        {
+            <p class="text-body-secondary">
+                Inserisci nome ed email per avviare la sessione: li useremo per precompilare le registrazioni
+                e per mostrarti le tue iscrizioni.
+            </p>
+
+            <EditForm Model="_model" OnValidSubmit="LoginAsync" class="card card-body shadow-sm">
+                <DataAnnotationsValidator />
+
+                <div class="mb-3">
+                    <label for="login-name" class="form-label">Nome e cognome</label>
+                    <InputText id="login-name" class="form-control" autocomplete="name" @bind-Value="_model.Name" />
+                    <ValidationMessage For="() => _model.Name" />
+                </div>
+
+                <div class="mb-3">
+                    <label for="login-email" class="form-label">Email</label>
+                    <InputText id="login-email" type="email" class="form-control" autocomplete="email" @bind-Value="_model.Email" />
+                    <ValidationMessage For="() => _model.Email" />
+                </div>
+
+                <div>
+                    <button type="submit" class="btn btn-primary">Accedi</button>
+                </div>
+            </EditForm>
+
+            <p class="small text-body-secondary mt-3">
+                Demo senza password: la sessione dura @((int)UserSessionService.SessionDuration.TotalHours) ore
+                oppure fino alla chiusura della scheda del browser.
+            </p>
+        }
+    </div>
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "returnUrl")]
+    public string? ReturnUrl { get; set; }
+
+    private readonly LoginModel _model = new();
+
+    // Only local URLs are accepted, to avoid open redirects (e.g. ?returnUrl=https://evil.example).
+    private string SafeReturnUrl => UrlHelper.GetSafeReturnUrl(ReturnUrl);
+
+    private async Task LoginAsync()
+    {
+        await Session.LoginAsync(_model.Name, _model.Email);
+        Navigation.NavigateTo(SafeReturnUrl);
+    }
+}

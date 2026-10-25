@@ -1,0 +1,212 @@
+@* Event card: shows name, date and location of an event.
+   Supports two-way binding (@bind-Event): in edit mode the inputs are bound to a draft copy,
+   and on save the updated event is sent back to the parent through EventChanged. *@
+
+<article class="card event-card shadow-sm h-100 @(IsPast ? "event-card--past" : null)">
+    <div class="event-card__date" aria-hidden="true">
+        <span class="event-card__day">@Current.Date.Day</span>
+        <span class="event-card__month">@ItalianDate.ShortMonth(Current.Date)</span>
+        <span class="event-card__year">@Current.Date.Year</span>
+    </div>
+
+    <div class="card-body d-flex flex-column">
+        @if (_draft is not null && _editContext is not null)
+        {
+            <EditForm EditContext="_editContext" OnValidSubmit="SaveAsync">
+                <DataAnnotationsValidator />
+                <h2 class="h5 mb-3">Modifica evento</h2>
+
+                <div class="mb-2">
+                    <label class="form-label" for="@FieldId("name")">Nome</label>
+                    <InputText id="@FieldId("name")" class="form-control" @bind-Value="_draft.Name" />
+                    <ValidationMessage For="() => _draft.Name" />
+                </div>
+
+                <div class="row g-2 mb-2">
+                    <div class="col-sm-7">
+                        <label class="form-label" for="@FieldId("date")">Data e ora</label>
+                        <InputDate Type="InputDateType.DateTimeLocal" id="@FieldId("date")" class="form-control" @bind-Value="_draft.Date" />
+                        <ValidationMessage For="() => _draft.Date" />
+                    </div>
+                    <div class="col-sm-5">
+                        <label class="form-label" for="@FieldId("capacity")">Capienza</label>
+                        <InputNumber id="@FieldId("capacity")" class="form-control" min="1" @bind-Value="_draft.Capacity" />
+                        <ValidationMessage For="() => _draft.Capacity" />
+                    </div>
+                </div>
+
+                <div class="mb-2">
+                    <label class="form-label" for="@FieldId("location")">Luogo</label>
+                    <InputText id="@FieldId("location")" class="form-control" @bind-Value="_draft.Location" />
+                    <ValidationMessage For="() => _draft.Location" />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label" for="@FieldId("description")">Descrizione</label>
+                    <InputTextArea id="@FieldId("description")" class="form-control" rows="3" @bind-Value="_draft.Description" />
+                    <ValidationMessage For="() => _draft.Description" />
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary btn-sm">Salva</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="CancelEdit">Annulla</button>
+                </div>
+            </EditForm>
+        }
+        else
+        {
+            <div class="d-flex flex-wrap gap-1 mb-2">
+                <span class="badge text-bg-light border">@Event.Category</span>
+                @if (IsPast)
+                {
+                    <span class="badge text-bg-secondary">Concluso</span>
+                }
+                else if (IsFull)
+                {
+                    <span class="badge text-bg-danger">Al completo</span>
+                }
+            </div>
+
+            <h2 class="h5 card-title mb-1">
+                @if (LinkToDetails)
+                {
+                    <a class="stretched-link-title" href="events/@Event.Id">@Event.Name</a>
+                }
+                else
+                {
+                    @Event.Name
+                }
+            </h2>
+
+            <p class="text-body-secondary small mb-2">
+                <span class="visually-hidden">Data: </span>@ItalianDate.Long(Event.Date)
+                <span aria-hidden="true"> · </span>
+                <span class="visually-hidden">Luogo: </span>@Event.Location
+            </p>
+
+            @if (ShowDescription && !string.IsNullOrWhiteSpace(Event.Description))
+            {
+                <p class="card-text mb-2">@Event.Description</p>
+            }
+
+            @if (RegisteredCount is int registered)
+            {
+                <CapacityBar Value="registered" Max="Event.Capacity" Label="Posti occupati" />
+            }
+
+            <div class="mt-auto pt-3 d-flex flex-wrap gap-2">
+                @if (ShowActions)
+                {
+                    @if (LinkToDetails)
+                    {
+                        <a class="btn btn-outline-primary btn-sm" href="events/@Event.Id">Dettagli</a>
+                    }
+                    @if (!IsPast && !IsFull)
+                    {
+                        <a class="btn btn-primary btn-sm" href="events/@Event.Id/register">Registrati</a>
+                    }
+                }
+                @if (AllowEdit && EventChanged.HasDelegate)
+                {
+                    <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="BeginEdit">Modifica</button>
+                }
+            </div>
+        }
+    </div>
+</article>
+
+@code {
+    /// <summary>The event to display. Use @bind-Event to receive the edited version.</summary>
+    [Parameter, EditorRequired]
+    public EventItem Event { get; set; } = default!;
+
+    [Parameter]
+    public EventCallback<EventItem> EventChanged { get; set; }
+
+    /// <summary>Number of registered attendees; when set, a capacity bar is shown.</summary>
+    [Parameter]
+    public int? RegisteredCount { get; set; }
+
+    [Parameter]
+    public bool ShowDescription { get; set; }
+
+    [Parameter]
+    public bool ShowActions { get; set; } = true;
+
+    [Parameter]
+    public bool LinkToDetails { get; set; } = true;
+
+    /// <summary>Shows the "Modifica" button (requires @bind-Event or EventChanged).</summary>
+    [Parameter]
+    public bool AllowEdit { get; set; }
+
+    private EventItem? _draft;
+    private EditContext? _editContext;
+    private ValidationMessageStore? _customMessages;
+
+    // While editing, the date tile previews the value being typed.
+    private EventItem Current => _draft ?? Event;
+
+    private bool IsPast => Event.Date <= DateTime.Now;
+
+    private bool IsFull => RegisteredCount >= Event.Capacity;
+
+    protected override void OnParametersSet()
+    {
+        // The same component instance is reused when navigating between events
+        // (e.g. /events/1 -> /events/2): discard a draft that belongs to another event.
+        if (_draft is not null && _draft.Id != Event.Id)
+        {
+            CancelEdit();
+        }
+    }
+
+    private string FieldId(string field) => $"event-{Event.Id}-{field}";
+
+    private void BeginEdit()
+    {
+        _draft = Event.Clone();
+        _editContext = new EditContext(_draft);
+        _customMessages = new ValidationMessageStore(_editContext);
+        _editContext.OnValidationRequested += (_, _) => ValidateCapacity();
+        _editContext.OnFieldChanged += (_, e) =>
+        {
+            if (e.FieldIdentifier.FieldName == nameof(EventItem.Capacity))
+            {
+                ValidateCapacity();
+            }
+        };
+    }
+
+    // Business rule that DataAnnotations cannot express: capacity cannot drop below current registrations.
+    private void ValidateCapacity()
+    {
+        if (_draft is null || _customMessages is null)
+        {
+            return;
+        }
+
+        var capacityField = new FieldIdentifier(_draft, nameof(EventItem.Capacity));
+        _customMessages.Clear(capacityField);
+        if (RegisteredCount is int registered && _draft.Capacity < registered)
+        {
+            _customMessages.Add(capacityField, $"La capienza non può essere inferiore agli iscritti attuali ({registered}).");
+        }
+
+        _editContext?.NotifyValidationStateChanged();
+    }
+
+    private void CancelEdit()
+    {
+        _draft = null;
+        _editContext = null;
+        _customMessages = null;
+    }
+
+    private async Task SaveAsync()
+    {
+        var updated = _draft!;
+        CancelEdit();
+        await EventChanged.InvokeAsync(updated);
+    }
+}

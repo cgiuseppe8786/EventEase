@@ -1,0 +1,180 @@
+@page "/events"
+@implements IDisposable
+@inject EventService EventService
+@inject AttendanceService Attendance
+
+<PageTitle>Eventi · EventEase</PageTitle>
+
+<h1>Eventi</h1>
+<p class="text-body-secondary">Cerca tra gli eventi, filtra per categoria e registrati in pochi secondi.</p>
+
+<div class="card card-body shadow-sm mb-4">
+    <div class="row g-3 align-items-end">
+        <div class="col-md-6">
+            <label for="search" class="form-label">Cerca</label>
+            <input id="search" type="search" class="form-control" placeholder="Nome, luogo o descrizione"
+                   maxlength="@MaxSearchLength" autocomplete="off"
+                   @bind="_search" @bind:event="oninput" @bind:after="OnSearchChangedAsync" />
+        </div>
+        <div class="col-md-4">
+            <label for="category" class="form-label">Categoria</label>
+            <select id="category" class="form-select" @bind="_category" @bind:after="ApplyFilters">
+                <option value="">Tutte le categorie</option>
+                @foreach (var category in _categories)
+                {
+                    <option value="@category">@category</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-2">
+            <div class="form-check mb-2">
+                <input id="hide-past" type="checkbox" class="form-check-input" @bind="_hidePast" @bind:after="ApplyFilters" />
+                <label for="hide-past" class="form-check-label">Nascondi conclusi</label>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (_loadError is not null)
+{
+    <div class="alert alert-danger d-flex justify-content-between align-items-center" role="alert">
+        <span>@_loadError</span>
+        <button type="button" class="btn btn-sm btn-outline-danger" @onclick="LoadAsync">Riprova</button>
+    </div>
+}
+else if (_events is null)
+{
+    <LoadingIndicator Text="Caricamento eventi…" />
+}
+else
+{
+    <p class="small text-body-secondary" aria-live="polite">
+        @(_filtered.Count == 1 ? "1 evento trovato" : $"{_filtered.Count} eventi trovati")
+    </p>
+
+    @if (_filtered.Count == 0)
+    {
+        <div class="alert alert-info">Nessun evento corrisponde ai criteri di ricerca.</div>
+    }
+    else
+    {
+        @* Virtualize renders only the cards visible in the viewport: the page stays fast even with thousands of events. *@
+        <Virtualize Items="_filtered" Context="ev" ItemSize="200" OverscanCount="4">
+            <div class="pb-3" @key="ev.Id">
+                <EventCard Event="ev" RegisteredCount="Attendance.GetRegisteredCount(ev.Id)" ShowDescription="true" />
+            </div>
+        </Virtualize>
+    }
+}
+
+@code {
+    private const int MaxSearchLength = 50;
+    private static readonly TimeSpan SearchDebounce = TimeSpan.FromMilliseconds(300);
+
+    /// <summary>Pre-selected category, e.g. /events?category=Workshop</summary>
+    [SupplyParameterFromQuery(Name = "category")]
+    public string? CategoryQuery { get; set; }
+
+    /// <summary>Pre-filled search, e.g. /events?q=blazor</summary>
+    [SupplyParameterFromQuery(Name = "q")]
+    public string? SearchQuery { get; set; }
+
+    private IReadOnlyList<EventItem>? _events;
+    private IReadOnlyList<string> _categories = [];
+    private List<EventItem> _filtered = [];
+    private string? _loadError;
+
+    private string _search = string.Empty;
+    private string _category = string.Empty;
+    private bool _hidePast = true;
+
+    private string? _appliedCategoryQuery;
+    private string? _appliedSearchQuery;
+    private CancellationTokenSource? _debounceCts;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_events is null)
+        {
+            await LoadAsync();
+        }
+
+        // OnParametersSet (not OnInitialized): the component is reused when only the query string
+        // changes, e.g. /events?category=Workshop -> /events?category=Meetup.
+        if (CategoryQuery != _appliedCategoryQuery || SearchQuery != _appliedSearchQuery)
+        {
+            _appliedCategoryQuery = CategoryQuery;
+            _appliedSearchQuery = SearchQuery;
+
+            // Ignore unknown categories coming from a hand-written or outdated URL.
+            _category = _categories.FirstOrDefault(c => string.Equals(c, CategoryQuery, StringComparison.OrdinalIgnoreCase)) ?? string.Empty;
+            _search = NormalizeSearch(SearchQuery);
+            ApplyFilters();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        _loadError = null;
+        try
+        {
+            _events = await EventService.GetEventsAsync();
+            _categories = await EventService.GetCategoriesAsync();
+            ApplyFilters();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            _loadError = "Impossibile caricare gli eventi. Controlla la connessione e riprova.";
+        }
+    }
+
+    // Debounce: filter only when the user stops typing, instead of on every keystroke.
+    private async Task OnSearchChangedAsync()
+    {
+        _debounceCts?.Cancel();
+        _debounceCts?.Dispose();
+        _debounceCts = new CancellationTokenSource();
+
+        try
+        {
+            await Task.Delay(SearchDebounce, _debounceCts.Token);
+            ApplyFilters();
+        }
+        catch (OperationCanceledException)
+        {
+            // A newer keystroke arrived: that one will apply the filters.
+        }
+    }
+
+    private void ApplyFilters()
+    {
+        if (_events is null)
+        {
+            return;
+        }
+
+        var term = NormalizeSearch(_search);
+        var now = DateTime.Now;
+
+        _filtered = _events
+            .Where(e => !_hidePast || e.Date > now)
+            .Where(e => _category.Length == 0 || e.Category == _category)
+            .Where(e => term.Length == 0
+                        || e.Name.Contains(term, StringComparison.OrdinalIgnoreCase)
+                        || e.Location.Contains(term, StringComparison.OrdinalIgnoreCase)
+                        || (e.Description?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false))
+            .ToList();
+    }
+
+    private static string NormalizeSearch(string? value)
+    {
+        var term = value?.Trim() ?? string.Empty;
+        return term.Length > MaxSearchLength ? term[..MaxSearchLength] : term;
+    }
+
+    public void Dispose()
+    {
+        _debounceCts?.Cancel();
+        _debounceCts?.Dispose();
+    }
+}

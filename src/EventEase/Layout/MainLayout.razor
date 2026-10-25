@@ -1,0 +1,66 @@
+﻿@inherits LayoutComponentBase
+@implements IDisposable
+@inject UserSessionService Session
+@inject NavigationManager Navigation
+
+<div class="page">
+    <div class="sidebar">
+        <NavMenu />
+    </div>
+
+    <main>
+        <div class="top-row px-4">
+            @if (Session.CurrentUser is { } user)
+            {
+                <span class="text-truncate">Ciao, <strong>@user.Name</strong></span>
+                <button type="button" class="btn btn-link" @onclick="LogoutAsync">Esci</button>
+            }
+            else
+            {
+                <a href="@LoginUrl">Accedi</a>
+            }
+        </div>
+
+        <article class="content px-4">
+            <ErrorBoundary @ref="_errorBoundary">
+                <ChildContent>
+                    @Body
+                </ChildContent>
+                <ErrorContent>
+                    <div class="alert alert-danger" role="alert">
+                        <h1 class="h4">Si è verificato un errore imprevisto</h1>
+                        <p class="mb-3">L'operazione non è stata completata. Riprova oppure torna alla home.</p>
+                        <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => _errorBoundary?.Recover()">Riprova</button>
+                        <a class="btn btn-sm btn-link" href="">Home</a>
+                    </div>
+                </ErrorContent>
+            </ErrorBoundary>
+        </article>
+    </main>
+</div>
+
+@code {
+    private ErrorBoundary? _errorBoundary;
+
+    // After a navigation to another page, leave the error state.
+    protected override void OnParametersSet() => _errorBoundary?.Recover();
+
+    protected override void OnInitialized() => Session.OnChange += HandleSessionChanged;
+
+    private string LoginUrl
+    {
+        get
+        {
+            var current = Navigation.ToBaseRelativePath(Navigation.Uri);
+            return current.Length == 0 || current.StartsWith("login", StringComparison.OrdinalIgnoreCase)
+                ? "login"
+                : $"login?returnUrl={Uri.EscapeDataString(current)}";
+        }
+    }
+
+    private Task LogoutAsync() => Session.LogoutAsync();
+
+    private void HandleSessionChanged() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Session.OnChange -= HandleSessionChanged;
+}

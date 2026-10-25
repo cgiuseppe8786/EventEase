@@ -1,0 +1,110 @@
+[
+  {
+    "id": 1,
+    "name": "Blazor Conf Italia 2026",
+    "date": "2026-11-20T09:30:00",
+    "location": "Milano · Centro Congressi",
+    "category": "Conferenza",
+    "description": "Una giornata di talk su Blazor, .NET 10 e sviluppo front-end in C#, con casi di studio da aziende italiane.",
+    "capacity": 250
+  },
+  {
+    "id": 2,
+    "name": "Workshop: componenti Blazor riutilizzabili",
+    "date": "2026-11-27T14:00:00",
+    "location": "Torino · Spazio Coworking Dora",
+    "category": "Workshop",
+    "description": "Laboratorio pratico: parametri, EventCallback, binding bidirezionale e librerie di componenti Razor.",
+    "capacity": 25
+  },
+  {
+    "id": 3,
+    "name": "Meetup .NET Roma",
+    "date": "2026-12-03T18:30:00",
+    "location": "Roma · Hub Tiburtina",
+    "category": "Meetup",
+    "description": "Serata della community .NET romana: due talk brevi, networking e pizza.",
+    "capacity": 80
+  },
+  {
+    "id": 4,
+    "name": "Webinar: performance in Blazor WebAssembly",
+    "date": "2026-12-10T17:00:00",
+    "location": "Online",
+    "category": "Webinar",
+    "description": "Virtualizzazione, riduzione dei render, lazy loading e AOT: come rendere veloce un'app Blazor WebAssembly.",
+    "capacity": 500
+  },
+  {
+    "id": 5,
+    "name": "Natale tra developer",
+    "date": "2026-12-17T19:00:00",
+    "location": "Bologna · Fabbrica dell'Innovazione",
+    "category": "Networking",
+    "description": "Aperitivo di fine anno per sviluppatori, designer e product manager dell'Emilia-Romagna.",
+    "capacity": 120
+  },
+  {
+    "id": 6,
+    "name": "Hackathon Smart City",
+    "date": "2027-01-23T09:00:00",
+    "location": "Napoli · Polo Tecnologico",
+    "category": "Hackathon",
+    "description": "48 ore per progettare servizi digitali per la mobilità urbana. Squadre da 3 a 5 persone.",
+    "capacity": 60
+  },
+  {
+    "id": 7,
+    "name": "Workshop: accessibilità nelle web app",
+    "date": "2027-02-06T10:00:00",
+    "location": "Firenze · Laboratorio Digitale",
+    "category": "Workshop",
+    "description": "Sessione a numero chiuso su ARIA, navigazione da tastiera e test con screen reader.",
+    "capacity": 3
+  },
+  {
+    "id": 8,
+    "name": "Cloud & AI Summit",
+    "date": "2027-03-18T09:00:00",
+    "location": "Milano · Fiera Nord",
+    "category": "Conferenza",
+    "description": "Architetture cloud-native, assistenti di programmazione basati su AI e sicurezza delle applicazioni.",
+    "capacity": 400
+  },
+  {
+    "id": 9,
+    "name": "Meetup Women in Tech",
+    "date": "2027-03-25T18:00:00",
+    "location": "Palermo · Cantieri Culturali",
+    "category": "Meetup",
+    "description": "Storie di carriera, mentorship e un panel sul futuro del lavoro nel settore tecnologico.",
+    "capacity": 70
+  },
+  {
+    "id": 10,
+    "name": "Webinar: Copilot per sviluppatori .NET",
+    "date": "2027-04-08T16:00:00",
+    "location": "Online",
+    "category": "Webinar",
+    "description": "Generazione di codice, debug assistito e refactoring con un assistente AI in Visual Studio e VS Code.",
+    "capacity": 1000
+  },
+  {
+    "id": 11,
+    "name": "Startup Networking Night",
+    "date": "2027-05-14T19:30:00",
+    "location": "Bari · Padiglione Levante",
+    "category": "Networking",
+    "description": "Startup, investitori e talenti del Sud Italia si incontrano in una serata di pitch e networking.",
+    "capacity": 150
+  },
+  {
+    "id": 12,
+    "name": "Dev Day Verona 2026",
+    "date": "2026-10-10T09:00:00",
+    "location": "Verona · Auditorium Arena",
+    "category": "Conferenza",
+    "description": "Edizione autunnale del Dev Day: evento già concluso, mostrato per verificare la gestione degli eventi passati.",
+    "capacity": 200
+  }
+]

@@ -1,0 +1,32 @@
+@* Only primitive parameters: Blazor skips re-rendering this component when its values do not change. *@
+
+<div class="mb-2">
+    <div class="d-flex justify-content-between small text-body-secondary mb-1">
+        <span>@Label</span>
+        <span>@Value / @Max</span>
+    </div>
+    <div class="progress" role="progressbar" aria-label="@Label" aria-valuenow="@Value" aria-valuemin="0" aria-valuemax="@Max" style="height: .5rem">
+        <div class="progress-bar @BarClass" style="width: @(Percent)%"></div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public int Value { get; set; }
+
+    [Parameter]
+    public int Max { get; set; }
+
+    [Parameter]
+    public string Label { get; set; } = string.Empty;
+
+    // Integer percentage: a culture-formatted double ("62,5") would produce invalid CSS.
+    private int Percent => Max <= 0 ? 0 : Math.Clamp((int)Math.Round(Value * 100.0 / Max), 0, 100);
+
+    private string BarClass => Percent switch
+    {
+        >= 100 => "bg-danger",
+        >= 80 => "bg-warning",
+        _ => "bg-success"
+    };
+}

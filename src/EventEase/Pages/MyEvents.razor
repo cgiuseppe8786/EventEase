@@ -1,0 +1,103 @@
+@page "/my-events"
+@implements IDisposable
+@inject EventService EventService
+@inject AttendanceService Attendance
+@inject UserSessionService Session
+
+<PageTitle>Le mie iscrizioni · EventEase</PageTitle>
+
+<h1>Le mie iscrizioni</h1>
+
+@if (Session.CurrentUser is not { } user)
+{
+    <div class="card card-body shadow-sm">
+        <p class="mb-3">Accedi con nome ed email per vedere gli eventi a cui sei registrato.</p>
+        <div>
+            <a class="btn btn-primary" href="login?returnUrl=my-events">Accedi</a>
+        </div>
+    </div>
+}
+else if (_eventsById is null)
+{
+    <LoadingIndicator />
+}
+else
+{
+    <p class="text-body-secondary">Sessione attiva per <strong>@user.Email</strong>.</p>
+
+    @if (_registrations.Count == 0)
+    {
+        <div class="alert alert-info">
+            Non sei ancora registrato a nessun evento. <a href="events" class="alert-link">Scopri gli eventi</a>.
+        </div>
+    }
+    else
+    {
+        <div class="list-group shadow-sm">
+            @foreach (var registration in _registrations)
+            {
+                var ev = _eventsById.GetValueOrDefault(registration.EventId);
+                <div class="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-2" @key="registration.Id">
+                    <div>
+                        @if (ev is null)
+                        {
+                            <strong>Evento non più disponibile</strong>
+                        }
+                        else
+                        {
+                            <a class="fw-semibold" href="events/@ev.Id">@ev.Name</a>
+                            <div class="small text-body-secondary">@ItalianDate.Long(ev.Date) · @ev.Location</div>
+                        }
+                        <div class="small text-body-secondary">Registrato il @ItalianDate.ShortWithTime(registration.RegisteredAt)</div>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        @if (registration.CheckedIn)
+                        {
+                            <span class="badge text-bg-success">Presente</span>
+                        }
+                        else
+                        {
+                            <span class="badge text-bg-primary">Iscritto</span>
+                            @if (ev is not null && ev.Date > DateTime.Now)
+                            {
+                                <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => CancelAsync(registration)">Annulla iscrizione</button>
+                            }
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+}
+
+@code {
+    private Dictionary<int, EventItem>? _eventsById;
+    private IReadOnlyList<Attendee> _registrations = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        Session.OnChange += HandleDataChanged;
+        Attendance.OnChange += HandleDataChanged;
+
+        var events = await EventService.GetEventsAsync();
+        _eventsById = events.ToDictionary(e => e.Id);
+        LoadRegistrations();
+    }
+
+    private void LoadRegistrations() =>
+        _registrations = Session.CurrentUser is { } user ? Attendance.GetRegistrationsByEmail(user.Email) : [];
+
+    private Task CancelAsync(Attendee registration) => Attendance.CancelRegistrationAsync(registration.Id);
+
+    private void HandleDataChanged() => _ = InvokeAsync(() =>
+    {
+        LoadRegistrations();
+        StateHasChanged();
+    });
+
+    public void Dispose()
+    {
+        Session.OnChange -= HandleDataChanged;
+        Attendance.OnChange -= HandleDataChanged;
+    }
+}
