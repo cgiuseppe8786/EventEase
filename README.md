@@ -1,10 +1,5 @@
 # EventEase
 
-![CI](https://github.com/cgiuseppe8786/EventEase/actions/workflows/ci.yml/badge.svg)
-![Deploy](https://github.com/cgiuseppe8786/EventEase/actions/workflows/deploy.yml/badge.svg)
-
-**Demo online:** <https://cgiuseppe8786.github.io/EventEase/>
-
 **EventEase** è un'applicazione **Blazor WebAssembly (.NET 10)** per la gestione di eventi aziendali e sociali:
 gli utenti scoprono gli eventi, si registrano tramite un modulo con convalida, ritrovano le proprie iscrizioni
 grazie alla sessione utente e gli organizzatori registrano le presenze all'ingresso.
