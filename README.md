@@ -1,6 +1,9 @@
 # EventEase
 
 ![CI](https://github.com/cgiuseppe8786/EventEase/actions/workflows/ci.yml/badge.svg)
+![Deploy](https://github.com/cgiuseppe8786/EventEase/actions/workflows/deploy.yml/badge.svg)
+
+**Demo online:** <https://cgiuseppe8786.github.io/EventEase/>
 
 **EventEase** è un'applicazione **Blazor WebAssembly (.NET 10)** per la gestione di eventi aziendali e sociali:
 gli utenti scoprono gli eventi, si registrano tramite un modulo con convalida, ritrovano le proprie iscrizioni
@@ -18,7 +21,7 @@ Il progetto riunisce le tre attività del corso *Blazor for Front-End Developmen
 
 | Requisito | Implementazione |
 |---|---|
-| Repository GitHub | Questo repository, con CI su GitHub Actions ([ci.yml](.github/workflows/ci.yml)) che compila ed esegue i test a ogni push. |
+| Repository GitHub | Questo repository, con CI su GitHub Actions ([ci.yml](.github/workflows/ci.yml)) che compila ed esegue i test a ogni push, e deploy automatico su GitHub Pages ([deploy.yml](.github/workflows/deploy.yml)). |
 | Componente **Event Card** con campi e **binding bidirezionale** | [EventCard.razor](src/EventEase/Components/EventCard.razor): mostra nome, data, luogo, categoria e capienza. Espone `Event` + `EventChanged`, quindi il genitore usa `@bind-Event` (vedi [EventDetails.razor](src/EventEase/Pages/EventDetails.razor)). In modifica, gli input (`@bind-Value`) sono legati a una copia ("draft"), così "Annulla" non altera l'originale. |
 | **Routing** implementato e debuggato | Rotte con vincoli di tipo (`/events/{Id:int}`), parametri opzionali (`/attendance/{EventId:int}`), query string (`/events?category=Workshop`), pagina 404 (`NotFoundPage` del `Router`) e messaggio dedicato per gli id inesistenti ([EventNotFound.razor](src/EventEase/Components/EventNotFound.razor)). |
 | **Ottimizzazione** (convalida input, errori di routing, prestazioni) | Vedi la sezione [Debug e ottimizzazioni](#debug-e-ottimizzazioni). |
@@ -38,7 +41,7 @@ Il progetto riunisce le tre attività del corso *Blazor for Front-End Developmen
 
 - .NET 10, Blazor WebAssembly standalone, Bootstrap 5
 - xUnit per i test unitari
-- GitHub Actions per la CI
+- GitHub Actions per la CI e per il deploy su GitHub Pages
 
 ## Avvio rapido
 
